@@ -1,5 +1,7 @@
 from typing import Dict, Tuple
 
+from opentrons.hardware_control.types import BoardRevision
+
 
 OUTPUT_PINS = {
     'FRAME_LEDS': 6,
@@ -12,11 +14,22 @@ OUTPUT_PINS = {
     'RED_BUTTON': 26
 }
 
-INPUT_PINS = {
-    'BUTTON_INPUT': 5,
-    'WINDOW_INPUT': 20,
+REV_PINS = {
     'REV_0': 17,
     'REV_1': 27
+}
+
+INPUT_PINS = {
+    BoardRevision.OG: {
+        'BUTTON_INPUT': 5,
+        'WINDOW_DOOR_SW': 20
+        },
+    BoardRevision.A: {
+        'BUTTON_INPUT': 5,
+        'DOOR_SW_FILT': 12,
+        'WINDOW_SW_FILT': 16,
+        'WINDOW_DOOR_SW': 20
+        }
 }
 
 
@@ -35,10 +48,11 @@ class SimulatingGPIOCharDev:
 
     def _initialize(self) -> Dict[int, str]:
         lines = {}
-        for name, offset in INPUT_PINS.items():
-            lines[offset] = name
-        for name, offset in OUTPUT_PINS.items():
-            lines[offset] = name
+        for pin_dict in [OUTPUT_PINS,
+                         INPUT_PINS[BoardRevision.A],
+                         REV_PINS]:
+            for name, offset in pin_dict.items():
+                lines[offset] = name
         self._initialize_values(list(lines.keys()))
         return lines
 
@@ -48,6 +62,9 @@ class SimulatingGPIOCharDev:
             self._values[offset] = 0
 
     async def setup(self):
+        pass
+
+    def config_by_board_rev(self, board_rev: BoardRevision):
         pass
 
     def set_high(self, offset: int):
@@ -86,14 +103,25 @@ class SimulatingGPIOCharDev:
         return bool(self._read(OUTPUT_PINS['FRAME_LEDS']))
 
     def read_button(self) -> bool:
-        pass
+        # button is normal-HIGH, so invert
+        return not bool(self._read(
+            INPUT_PINS[BoardRevision.OG]['BUTTON_INPUT']))
 
     def read_window_switches(self) -> bool:
-        return (bool(self._read(OUTPUT_PINS['WINDOW_INPUT'])))
+        return bool(self._read(
+            INPUT_PINS[BoardRevision.OG]['WINDOW_DOOR_SW']))
+
+    def read_top_window_switch(self) -> bool:
+        return bool(self._read(
+            INPUT_PINS[BoardRevision.A]['WINDOW_SW_FILT']))
+
+    def read_front_door_switch(self) -> bool:
+        return bool(self._read(
+            INPUT_PINS[BoardRevision.A]['DOOR_SW_FILT']))
 
     def read_revision_bits(self) -> Tuple[bool, bool]:
-        return (bool(self._read(OUTPUT_PINS['REV_0'])),
-                bool(self._read(OUTPUT_PINS['REV_1'])))
+        return (bool(self._read(REV_PINS['REV_0'])),
+                bool(self._read(REV_PINS['REV_1'])))
 
     def release_line(self, offset: int):
         self.lines.pop(offset)
